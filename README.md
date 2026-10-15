@@ -22,8 +22,28 @@ Android 11 (API 30) or later.
 1. Download `shot-bubble-<version>.apk` from [Releases](../../releases) and install it.
 2. Open **Shot Bubble** and allow notifications.
 3. Go to **Settings → Accessibility → Shot Bubble** and turn it on.
-   - If the toggle is greyed out ("Restricted setting"), open **Settings → Apps → Shot Bubble → ⋮ → Allow restricted settings**, then try again.
+   If it's blocked, see [Restricted settings](#restricted-settings) below.
 4. Optional: add the **截圖小白點** tile in Quick Settings.
+
+Updates signed with the same key install over the previous version and keep your settings.
+
+### Restricted settings
+
+On Android 13 and later, apps installed from a browser download or a file manager can't turn on an accessibility service until you allow it. The toggle is greyed out, or a "Restricted setting" dialog appears. To unblock it:
+
+1. Try to turn on **Settings → Accessibility → Shot Bubble** once. Android blocks it, and this is what makes the next option appear.
+2. Open **Settings → Apps → Shot Bubble**. The **Open app info** button on the app's main screen goes straight there.
+3. Tap **⋮** (top right) → **Allow restricted settings**, then confirm with your fingerprint or PIN.
+4. Go back to **Settings → Accessibility → Shot Bubble** and turn it on.
+
+The ⋮ menu option only shows up after step 1. The app's main screen shows these same steps while the service is off.
+
+在 Android 13 以上，從瀏覽器或檔案管理員安裝的 App 會被擋住無障礙權限（開關是灰色，或跳出「受限制的設定」）：
+
+1. 先到 **設定 → 無障礙 → Shot Bubble** 試著開啟一次，會被擋下，這一步是讓下一步的選項出現
+2. 到 **設定 → 應用程式 → Shot Bubble**（App 主畫面的「開啟應用程式資訊」按鈕可以直接跳過去）
+3. 點右上角 **⋮** →「**允許受限制的設定**」，再驗證指紋或 PIN
+4. 回到無障礙設定開啟 Shot Bubble
 
 ### Why Accessibility?
 
