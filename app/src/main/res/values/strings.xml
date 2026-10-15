@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shot Bubble</string>
+    <string name="tile_label">截圖小白點</string>
+    <string name="a11y_description">在螢幕上顯示一個懸浮小白點，點一下就截圖並直接複製到剪貼簿，不會存進相簿。需要無障礙權限才能截圖與顯示懸浮按鈕。</string>
+    <string name="status_enabled">✅ 服務已啟用，小白點應該已經出現在螢幕邊緣。</string>
+    <string name="status_disabled">⚠️ 服務尚未啟用。請到「無障礙」設定開啟 Shot Bubble。</string>
+    <string name="open_settings">開啟無障礙設定</string>
+    <string name="help">使用方式：
+• 點一下小白點：截圖並複製到剪貼簿
+• 拖曳小白點：放開後會自動貼齊螢幕邊緣
+• 快速設定可以加「截圖小白點」磚，用來顯示或隱藏小白點
+
+如果無障礙設定裡的開關是灰色的（受限設定）：
+到「設定 → 應用程式 → Shot Bubble」，點右上角 ⋮ →「允許受限制的設定」，再回來開啟服務。</string>
+    <string name="tile_service_off">服務未啟用</string>
+    <string name="toast_copied">截圖已複製到剪貼簿</string>
+    <string name="toast_secure">這個畫面禁止截圖</string>
+    <string name="toast_too_fast">截圖太頻繁，請稍候再試</string>
+    <string name="toast_failed">截圖失敗（錯誤碼 %1$d）</string>
+</resources>
