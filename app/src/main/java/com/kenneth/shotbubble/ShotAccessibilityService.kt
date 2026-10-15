@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.media.AudioAttributes
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +21,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
+import java.io.File
 import java.lang.ref.WeakReference
 import java.util.concurrent.Executors
 
@@ -91,17 +91,24 @@ class ShotAccessibilityService : AccessibilityService() {
         // Runs on the worker thread.
         override fun onSuccess(result: ScreenshotResult) {
             mainHandler.post(::restoreBubble)
-            val uri = try {
+            val captured = try {
                 val bitmap = result.hardwareBuffer.use {
                     Bitmap.wrapHardwareBuffer(it, result.colorSpace)?.copy(Bitmap.Config.ARGB_8888, false)
                 } ?: error("wrapHardwareBuffer returned null")
-                ScreenshotStore.save(this@ShotAccessibilityService, bitmap).also { bitmap.recycle() }
+                val file = ScreenshotStore.save(this@ShotAccessibilityService, bitmap)
+                val thumbnail = ScreenshotStore.thumbnail(bitmap)
+                bitmap.recycle()
+                file to thumbnail
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save screenshot", e)
                 null
             }
             mainHandler.post {
-                if (uri != null) onCaptured(uri) else toast(getString(R.string.toast_failed, -1))
+                if (captured != null) {
+                    onCaptured(captured.first, captured.second)
+                } else {
+                    toast(getString(R.string.toast_failed, -1))
+                }
             }
         }
 
@@ -125,12 +132,11 @@ class ShotAccessibilityService : AccessibilityService() {
         capturing = false
     }
 
-    private fun onCaptured(uri: Uri) {
+    private fun onCaptured(file: File, thumbnail: Bitmap) {
         val clipboard = getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newUri(contentResolver, "Screenshot", uri))
+        clipboard.setPrimaryClip(ClipData.newUri(contentResolver, "Screenshot", ScreenshotStore.uriFor(this, file)))
         vibrate()
-        // Android 13+ shows its own clipboard preview, so only toast on older versions.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) toast(getString(R.string.toast_copied))
+        Notifier.showCaptured(this, file, thumbnail)
     }
 
     private fun vibrate() {
