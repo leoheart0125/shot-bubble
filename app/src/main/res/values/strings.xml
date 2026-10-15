@@ -6,13 +6,9 @@
     <string name="status_enabled">✅ 服務已啟用，小白點應該已經出現在螢幕邊緣。</string>
     <string name="status_disabled">⚠️ 服務尚未啟用。請到「無障礙」設定開啟 Shot Bubble。</string>
     <string name="open_settings">開啟無障礙設定</string>
-    <string name="help">使用方式：
-• 點一下小白點：截圖並複製到剪貼簿
-• 拖曳小白點：放開後會自動貼齊螢幕邊緣
-• 快速設定可以加「截圖小白點」磚，用來顯示或隱藏小白點
-
-如果無障礙設定裡的開關是灰色的（受限設定）：
-到「設定 → 應用程式 → Shot Bubble」，點右上角 ⋮ →「允許受限制的設定」，再回來開啟服務。</string>
+    <string name="help">使用方式：\n• 點一下小白點：截圖並複製到剪貼簿\n• 拖曳小白點：放開後會自動貼齊螢幕邊緣\n• 快速設定可以加「截圖小白點」磚，用來顯示或隱藏小白點</string>
+    <string name="restricted_help">開不了無障礙服務，或跳出「受限制的設定」？\n從瀏覽器或檔案安裝的 App，Android 會先擋住無障礙權限。請照下面步驟解除：\n1. 先到無障礙設定試著開啟一次（會被擋下）\n2. 點下方按鈕，進入應用程式資訊\n3. 點右上角 ⋮ →「允許受限制的設定」，再驗證指紋或 PIN\n4. 回到無障礙設定開啟 Shot Bubble</string>
+    <string name="open_app_info">開啟應用程式資訊</string>
     <string name="tile_service_off">服務未啟用</string>
     <string name="channel_captures">截圖通知</string>
     <string name="notif_title">截圖已複製到剪貼簿</string>
