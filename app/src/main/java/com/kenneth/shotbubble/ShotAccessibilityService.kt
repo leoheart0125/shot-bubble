@@ -26,14 +26,16 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.Executors
 
 /**
- * Hosts the floating bubble and turns a tap into a screenshot that goes straight to the
- * clipboard. Uses AccessibilityService.takeScreenshot, so nothing is written to MediaStore.
+ * Hosts the floating bubble. Tapping it opens a menu: copy a screenshot straight to the clipboard
+ * (nothing written to MediaStore), or save one to the gallery like a normal screenshot.
+ * Uses AccessibilityService.takeScreenshot for both.
  */
 class ShotAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private var bubble: BubbleView? = null
+    private var menu: BubbleMenu? = null
     private var capturing = false
 
     override fun onServiceConnected() {
@@ -49,6 +51,8 @@ class ShotAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        // The menu was placed for the old screen size; close it rather than re-layout.
+        menu?.dismiss()
         // Post so the new window metrics are in place before we re-clamp the bubble.
         mainHandler.post { bubble?.reposition() }
     }
@@ -67,49 +71,95 @@ class ShotAccessibilityService : AccessibilityService() {
 
     private fun showBubble() {
         if (bubble != null) return
-        bubble = BubbleView(this, getSystemService(WindowManager::class.java), ::captureToClipboard)
-            .also { it.attach() }
+        val windowManager = getSystemService(WindowManager::class.java)
+        bubble = BubbleView(
+            this,
+            windowManager,
+            onTap = ::openMenu,
+            // Only the bubble has to disappear here (no menu window), so a shorter wait is enough.
+            onQuickCapture = { capture(Prefs.quickCaptureMode(this), QUICK_HIDE_DELAY_MS) },
+        ).also { it.attach() }
+        menu = BubbleMenu(this, windowManager, onDismiss = { bubble?.scheduleDim() })
     }
 
     private fun hideBubble() {
+        menu?.dismiss()
+        menu = null
         bubble?.detach()
         bubble = null
     }
 
-    private fun captureToClipboard() {
+    private fun openMenu() {
+        val bubble = bubble ?: return
+        val menu = menu ?: return
+        if (capturing || menu.isShowing) return
+        bubble.wake()
+        val items = MenuAction.entries.associateWith { action ->
+            BubbleMenu.Item(action.icon, action.label) {
+                when (action) {
+                    MenuAction.COPY -> capture(CaptureMode.CLIPBOARD)
+                    MenuAction.GALLERY -> capture(CaptureMode.GALLERY)
+                    MenuAction.HIDE -> hideFromMenu()
+                    MenuAction.BACK -> Unit
+                }
+            }
+        }
+        // Slots are top-left, top-right, bottom-left, bottom-right, as arranged in the app.
+        val slots = Prefs.menuSlots(this).map(items::getValue)
+        menu.show(bubble, rows = slots.chunked(2), primary = items.getValue(MenuAction.COPY))
+    }
+
+    /** Same as turning the Quick Settings tile off; the tile or the app's main screen brings it back. */
+    private fun hideFromMenu() {
+        Prefs.setBubbleVisible(this, false)
+        hideBubble()
+        refreshTile()
+        toast(getString(R.string.toast_hidden))
+    }
+
+    private fun capture(mode: CaptureMode, hideDelayMs: Long = MENU_HIDE_DELAY_MS) {
         if (capturing) return
         capturing = true
-        // Hide the bubble and wait for a frame so it doesn't end up in the screenshot.
+        // Hide the bubble and wait for the compositor so neither it nor the menu ends up in the screenshot.
         bubble?.visibility = View.INVISIBLE
         mainHandler.postDelayed(
-            { takeScreenshot(Display.DEFAULT_DISPLAY, worker, screenshotCallback) },
-            HIDE_DELAY_MS,
+            { takeScreenshot(Display.DEFAULT_DISPLAY, worker, ScreenshotCallback(mode)) },
+            hideDelayMs,
         )
     }
 
-    private val screenshotCallback = object : TakeScreenshotCallback {
+    private inner class ScreenshotCallback(private val mode: CaptureMode) : TakeScreenshotCallback {
         // Runs on the worker thread.
         override fun onSuccess(result: ScreenshotResult) {
-            mainHandler.post(::restoreBubble)
-            val captured = try {
+            // Buzz as soon as the shot is taken, before the encode/save below.
+            mainHandler.post {
+                restoreBubble()
+                vibrate()
+            }
+            val onDone: () -> Unit = try {
                 val bitmap = result.hardwareBuffer.use {
                     Bitmap.wrapHardwareBuffer(it, result.colorSpace)?.copy(Bitmap.Config.ARGB_8888, false)
                 } ?: error("wrapHardwareBuffer returned null")
-                val file = ScreenshotStore.save(this@ShotAccessibilityService, bitmap)
-                val thumbnail = ScreenshotStore.thumbnail(bitmap)
-                bitmap.recycle()
-                file to thumbnail
+                try {
+                    when (mode) {
+                        CaptureMode.CLIPBOARD -> {
+                            val file = ScreenshotStore.save(this@ShotAccessibilityService, bitmap)
+                            val thumbnail = ScreenshotStore.thumbnail(bitmap)
+                            ({ onCopied(file, thumbnail) })
+                        }
+                        CaptureMode.GALLERY -> {
+                            ScreenshotStore.saveToGallery(this@ShotAccessibilityService, bitmap)
+                            ::onSavedToGallery
+                        }
+                    }
+                } finally {
+                    bitmap.recycle()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to save screenshot", e)
-                null
+                ({ toast(getString(R.string.toast_failed, -1)) })
             }
-            mainHandler.post {
-                if (captured != null) {
-                    onCaptured(captured.first, captured.second)
-                } else {
-                    toast(getString(R.string.toast_failed, -1))
-                }
-            }
+            mainHandler.post(onDone)
         }
 
         override fun onFailure(errorCode: Int) {
@@ -132,11 +182,14 @@ class ShotAccessibilityService : AccessibilityService() {
         capturing = false
     }
 
-    private fun onCaptured(file: File, thumbnail: Bitmap) {
+    private fun onCopied(file: File, thumbnail: Bitmap) {
         val clipboard = getSystemService(ClipboardManager::class.java)
         clipboard.setPrimaryClip(ClipData.newUri(contentResolver, "Screenshot", ScreenshotStore.uriFor(this, file)))
-        vibrate()
         Notifier.showCaptured(this, file, thumbnail)
+    }
+
+    private fun onSavedToGallery() {
+        toast(getString(R.string.toast_saved))
     }
 
     private fun vibrate() {
@@ -166,7 +219,9 @@ class ShotAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "ShotBubble"
-        private const val HIDE_DELAY_MS = 150L
+        /** After a menu choice: the menu window has to be removed as well as the bubble hidden. */
+        private const val MENU_HIDE_DELAY_MS = 200L
+        private const val QUICK_HIDE_DELAY_MS = 50L
 
         @Volatile
         private var instanceRef: WeakReference<ShotAccessibilityService>? = null

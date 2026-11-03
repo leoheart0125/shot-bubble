@@ -1,14 +1,20 @@
 # Shot Bubble
 
-A floating, iOS AssistiveTouch-style button for Android (built and tested on Pixel). Tap it to take a screenshot that goes **straight to the clipboard without being saved to the gallery** — no more deleting screenshots afterwards.
+A floating, iOS AssistiveTouch-style button for Android (built and tested on Pixel). Tap it to open a menu, then take a screenshot that goes **straight to the clipboard without being saved to the gallery** — no more deleting screenshots afterwards.
 
-一顆像 iOS 輔助觸控的懸浮小白點：點一下就截圖並複製到剪貼簿，**不會存進相簿**，不用再回相簿刪截圖。
+一顆像 iOS 輔助觸控的懸浮小白點：點一下展開選單，截圖並複製到剪貼簿，**不會存進相簿**，不用再回相簿刪截圖。
 
 ## Features
 
-- Tap the bubble → screenshot copied to clipboard (paste into Discord, LINE, Gboard, …)
+- Tap the bubble → menu expands next to it, so a stray tap never takes a screenshot
+  - **複製 (Copy)** → screenshot copied to clipboard (paste into Discord, LINE, Gboard, …)
+  - **存相簿 (Save)** → regular screenshot saved to `Pictures/Screenshots`, nothing copied
+  - **隱藏 (Hide)** → hide the bubble; bring it back from the Quick Settings tile or the app's main screen
+  - **返回 (Back)**, tap anywhere outside the menu, or wait 5 seconds → collapse back to the bubble
+- Optional quick capture: double-tap or long-press the bubble to copy (or save) without opening the menu. A long press is cancelled as soon as the finger moves, so dragging never triggers it
+- Menu layout is configurable in the app (which action goes in which corner)
 - Drag to move; snaps to the nearest screen edge and dims when idle
-- Notification after each capture with a **Save to gallery** action (`Pictures/Screenshots`)
+- Notification after each clipboard capture with a **Save to gallery** action (`Pictures/Screenshots`)
 - Quick Settings tile to show / hide the bubble
 - Haptic feedback that works even with system touch feedback turned off
 - Only the latest screenshot is kept in the app's private cache
@@ -66,3 +72,22 @@ storePassword=...
 keyAlias=...
 keyPassword=...
 ```
+
+## Release
+
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it checks the tag matches `versionName`, builds a signed release APK, verifies it's signed with the usual key, and attaches `shot-bubble-<version>.apk` to the GitHub release (creating the release with generated notes if it doesn't exist yet).
+
+```bash
+# after bumping versionCode / versionName in app/build.gradle.kts and committing
+git tag v1.0.3
+git push origin v1.0.3
+```
+
+The workflow needs these repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `KEYSTORE_BASE64` | `base64` of the `.jks` file |
+| `KEYSTORE_PASSWORD` | `storePassword` |
+| `KEY_ALIAS` | `keyAlias` |
+| `KEY_PASSWORD` | `keyPassword` |
