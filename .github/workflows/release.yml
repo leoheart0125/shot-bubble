@@ -1,0 +1,107 @@
+name: Release
+
+# Push a tag like v1.0.3 → build a signed release APK → attach it to the GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Certificate of the key every release so far was signed with. A different key means the APK
+      # won't install over existing installs, so the job fails instead of publishing it.
+      EXPECTED_CERT_SHA256: "08:03:1c:1e:5b:4c:67:b3:86:da:1d:16:d5:af:99:07:59:6c:c3:01:cb:25:0c:68:90:bb:8b:20:ca:90:3f:12"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches versionName
+        id: version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          if [ "$tag_version" != "$app_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match versionName $app_version in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "version=$app_version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # Without these the build silently produces an unsigned APK, so stop here instead.
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set"
+              exit 1
+            fi
+          done
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Verify signature
+        id: apk
+        run: |
+          apk="shot-bubble-${{ steps.version.outputs.version }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          cert=$("$apksigner" verify --print-certs "$apk" \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' \
+            | sed 's/../&:/g; s/:$//')
+          echo "Signing certificate SHA-256: $cert"
+          if [ "$cert" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK is signed with $cert, expected $EXPECTED_CERT_SHA256"
+            exit 1
+          fi
+          echo "path=$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK: ${{ steps.apk.outputs.path }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # A release written by hand for this tag already exists: keep its notes, just attach the APK.
+            gh release upload "$GITHUB_REF_NAME" "$APK" --clobber
+          else
+            {
+              echo "Signed with the same key as earlier releases, so it installs over them directly."
+              echo
+              echo "Signing certificate SHA-256: \`$EXPECTED_CERT_SHA256\`"
+            } > notes.md
+            gh release create "$GITHUB_REF_NAME" "$APK" \
+              --title "Shot Bubble $VERSION" \
+              --notes-file notes.md \
+              --generate-notes
+          fi
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" keystore.properties
