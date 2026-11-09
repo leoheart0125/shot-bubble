@@ -53,7 +53,7 @@ class MainActivity : Activity() {
             setText(R.string.show_bubble)
             setOnClickListener {
                 Prefs.setBubbleVisible(this@MainActivity, true)
-                ShotAccessibilityService.instance?.setBubbleVisible(true)
+                ShotAccessibilityService.instance?.refreshBubble()
                 updateShowBubble()
             }
         }

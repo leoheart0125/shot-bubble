@@ -25,7 +25,7 @@ class BubbleTileService : TileService() {
         }
         val visible = !Prefs.isBubbleVisible(this)
         Prefs.setBubbleVisible(this, visible)
-        service.setBubbleVisible(visible)
+        service.refreshBubble()
         updateTile()
     }
 

@@ -1,15 +1,20 @@
 package com.kenneth.shotbubble
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -38,10 +43,27 @@ class ShotAccessibilityService : AccessibilityService() {
     private var menu: BubbleMenu? = null
     private var capturing = false
 
+    /**
+     * Ambient display (lift to wake, new notifications, AOD) lights the screen while the device is still
+     * dozing, and accessibility overlays draw there too. Keep the bubble hidden until the device is
+     * interactive; the normal lock screen still shows it. SCREEN_ON/OFF track exactly that state.
+     * (Display.state isn't usable here: Pixels report STATE_ON during a notification pulse.)
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = refreshBubble()
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instanceRef = WeakReference(this)
-        if (Prefs.isBubbleVisible(this)) showBubble()
+        registerReceiver(
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            },
+        )
+        refreshBubble()
         refreshTile()
     }
 
@@ -58,6 +80,7 @@ class ShotAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(screenReceiver)
         hideBubble()
         instanceRef = null
         worker.shutdown()
@@ -65,8 +88,13 @@ class ShotAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
-    fun setBubbleVisible(visible: Boolean) {
-        if (visible) showBubble() else hideBubble()
+    /** Shows or hides the bubble to match the saved preference and the current screen/lock state. */
+    fun refreshBubble() {
+        if (Prefs.isBubbleVisible(this) && getSystemService(PowerManager::class.java).isInteractive) {
+            showBubble()
+        } else {
+            hideBubble()
+        }
     }
 
     private fun showBubble() {
